@@ -20,6 +20,9 @@ public:
     // Method to push an element onto the stack
     void push_back(const IT& val);
 
+    // Method to push an element onto the stack
+    void push(const IT& val);
+
     // Method to pop an element from the stack
     IT back();
     
@@ -29,6 +32,8 @@ public:
     // Method to pop an element from the stack
     bool empty();
 
+    std::optional<IT> pop();
+    
     void pop_back();
     // Method to clear the stack
     void clear();
@@ -79,6 +84,17 @@ void Stack<IT>::push_back(const IT& val) {
     }
 }
 
+
+// Method to push an element onto the stack
+template <typename IT>
+void Stack<IT>::push(const IT& val) {
+    if (top < capacity) {
+        data[top++] = val;
+    } else {
+        throw std::overflow_error("Stack overflow");
+    }
+}
+
 // Method to pop an element from the stack
 template <typename IT>
 IT Stack<IT>::back() {
@@ -102,6 +118,15 @@ void Stack<IT>::pop_back() {
     } else {
         throw std::underflow_error("Stack underflow");
     }
+}
+
+
+// Method to pop an element from the stack
+template <typename IT>
+std::optional<IT> Stack<IT>::pop() {
+    IT val = back();
+    pop_back();
+    return std::optional<IT>(val);
 }
 
 // Method to clear the stack
