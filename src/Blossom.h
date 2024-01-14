@@ -3,6 +3,7 @@
 
 #include "Vertex.h"
 #include "Stack.h"
+#include "StackPusher.h"
 
 class Blossom {
     public:
@@ -12,12 +13,12 @@ class Blossom {
         template <typename IT>
         static Vertex<IT>* Root(Vertex<IT>* x);
         // Static method to find the root of a vertex
-        template <typename IT, typename VT>
+    template <typename IT, typename VT, template <typename> class StackType>
         static void Shrink(const Graph<IT, VT>& graph, 
                             const IT stackEdge, 
                             DisjointSetUnion<IT> &dsu,
                             std::vector<Vertex<IT>> & vertexVector, 
-                            Stack<IT> &stack);
+                            StackType<IT> &stack);
     private:
 
         // Helper function for path compression
@@ -39,12 +40,12 @@ Vertex<IT>* Blossom::Base(Vertex<IT>* x) {
     return FindSet(x)->BaseField;
 }
 
-template <typename IT, typename VT>
+template <typename IT, typename VT, template <typename> class StackType>
 void Blossom::Shrink(const Graph<IT, VT>& graph, 
                     const IT stackEdge, 
                     DisjointSetUnion<IT> &dsu,
                     std::vector<Vertex<IT>> & vertexVector, 
-                    Stack<IT> &stack){
+                    StackType<IT> &stack){
     // V,W
     IT EdgeFromVertexID,EdgeToVertexID;
     Vertex<IT> *EdgeToVertex;
@@ -103,7 +104,8 @@ void Blossom::Shrink(const Graph<IT, VT>& graph,
             printf("MASSIVE ERROR!!!\n");
         }
         if (!Found){
-            Found = Graph<IT,VT>::pushEdgesOntoStack(graph,vertexVector,EdgeToVertexID,stack,matchedEdge,treeEdge);
+            Found = StackPusher<IT,VT,StackType>::pushEdgesOntoStack(graph,vertexVector,EdgeToVertexID,stack,matchedEdge,treeEdge);
+            //Found = Graph<IT,VT>::pushEdgesOntoStack(graph,vertexVector,EdgeToVertexID,stack,matchedEdge,treeEdge);
         }
 
         // Little unsure of this logic.

@@ -25,10 +25,10 @@ private:
     static Vertex<IT> * search(Graph<IT, VT>& graph, 
                     const size_t V_index,
                     FrontierType<IT, StackType> & f);
-    template <typename IT, typename VT>
+    template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
     static void augment(Graph<IT, VT>& graph, 
                     Vertex<IT> * TailOfAugmentingPath,
-                    Frontier<IT> & f);
+                    FrontierType<IT, StackType> & f);
     template <typename IT, typename VT>
     static void pathThroughBlossom(Graph<IT, VT>& graph, 
                         // V
@@ -87,7 +87,7 @@ void Matcher::match(Graph<IT, VT>& graph, Statistics<IT>& stats) {
             auto search_end = high_resolution_clock::now();
             // If not a nullptr, I found an AP.
             if (TailOfAugmentingPath){
-                //augment(graph,TailOfAugmentingPath,f);
+                augment(graph,TailOfAugmentingPath,f);
                 stats.write_entry(f.path.size() ? (2*f.path.size()-1):0,f.tree.size(),duration_cast<microseconds>(search_end - search_start));
                 f.reinit();
                 f.clear();
@@ -171,16 +171,16 @@ Vertex<IT> * Matcher::search(Graph<IT, VT>& graph,
         } else if (ToBase->IsEven()) {
             // Shrink Blossoms
             // Not sure if this is wrong or the augment method is wrong
-            //Blossom::Shrink(graph,stackEdge,dsu,vertexVector,stack);
+            Blossom::Shrink(graph,stackEdge,dsu,vertexVector,stack);
         }
     }
     return nullptr;
 }
 
-template <typename IT, typename VT>
+template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
 void Matcher::augment(Graph<IT, VT>& graph, 
                     Vertex<IT> * TailOfAugmentingPath,
-                    Frontier<IT> & f) {
+                    FrontierType<IT, StackType> & f) {
 
     DisjointSetUnion<IT> &dsu = f.dsu;
     std::vector<Vertex<IT>> & vertexVector = f.vertexVector;
