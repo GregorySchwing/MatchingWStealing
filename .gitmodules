@@ -1,0 +1,3 @@
+[submodule "fast_matrix_market"]
+	path = fast_matrix_market
+	url = https://github.com/GregorySchwing/fast_matrix_market.git

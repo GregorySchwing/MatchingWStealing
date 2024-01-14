@@ -198,6 +198,32 @@ target_link_libraries(
 
 endif()
 
+
+# -----------------------------------------------------------------------------
+# Example program 
+# -----------------------------------------------------------------------------
+
+if(${WSQ_BUILD_EXAMPLES})
+
+message(STATUS "Building examples ...")
+add_subdirectory(fast_matrix_market)
+add_executable(matcher ${PROJECT_SOURCE_DIR}/Main.cpp)
+target_include_directories(matcher PRIVATE ${PROJECT_SOURCE_DIR}/src)
+
+find_package(OpenMP REQUIRED)
+if(OpenMP_CXX_FOUND)
+    target_compile_options(matcher PRIVATE ${OpenMP_CXX_FLAGS})
+    target_link_libraries(
+      matcher ${PROJECT_NAME} Threads::Threads wsq::default_settings fast_matrix_market::fast_matrix_market ${OpenMP_CXX_FLAGS}
+    )
+else()
+    target_link_libraries(
+      matcher ${PROJECT_NAME} Threads::Threads wsq::default_settings fast_matrix_market::fast_matrix_market
+    )
+endif()
+
+endif()
+
 # -----------------------------------------------------------------------------
 # Unittest
 # -----------------------------------------------------------------------------
