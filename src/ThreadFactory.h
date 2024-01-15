@@ -66,9 +66,14 @@ void ThreadFactory::create_threads_concurrentqueue_baseline(std::vector<std::thr
                                                                    std::vector<Frontier<IT>*> & frontiers,
                                                                    volatile bool &foundPath,
                                                                    volatile bool &finished) {
-
+    // Works, infers template types from args
+    //Matcher::search(graph,0,*(frontiers[0]));
     for (unsigned i = 1; i < num_threads+1; ++i) {
-        threads[i-1] = std::thread(&Matcher::hello_world, i);
+        //threads[i-1] = std::thread(&Matcher::hello_world, i);
+
+        threads[i-1] = std::thread( [&]{ Matcher::search(graph,0,*(frontiers[0])); } );
+        //threads[i-1] = std::thread( [&]{ Matcher::search_slave(graph,frontiers,read_messages,foundPath,finished,i); } );
+        threads[i-1] = std::thread( [&]{ Matcher::search_slave(graph,0,*(frontiers[0])); } );
 
         /*
         threads[i-1] = std::thread(&Matcher::search_persistent_baseline<IT,VT>,

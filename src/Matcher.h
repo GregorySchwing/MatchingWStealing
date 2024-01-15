@@ -22,11 +22,15 @@ public:
     template <typename IT, typename VT, template <typename> class StackType = Stack>
     static void match(Graph<IT, VT>& graph, Statistics<IT>& stats);
     static void hello_world(int tid);
-private:
     template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
     static Vertex<IT> * search(Graph<IT, VT>& graph, 
                     const size_t V_index,
                     FrontierType<IT, StackType> & f);
+    template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
+    static void search_slave(Graph<IT, VT>& graph, 
+                    const size_t V_index,
+                    FrontierType<IT, StackType> & f);
+    private:
     template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
     static void augment(Graph<IT, VT>& graph, 
                     Vertex<IT> * TailOfAugmentingPath,
@@ -108,6 +112,12 @@ void Matcher::match(Graph<IT, VT>& graph, Statistics<IT>& stats) {
         }
     }
 }
+
+
+template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
+void Matcher::search_slave(Graph<IT, VT>& graph, 
+                    const size_t V_index,
+                    FrontierType<IT, StackType> & f) {}
 
 
 template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
