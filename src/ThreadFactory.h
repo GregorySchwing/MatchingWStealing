@@ -69,21 +69,9 @@ void ThreadFactory::create_threads_concurrentqueue_baseline(std::vector<std::thr
                                                     volatile bool &finished) {
     // Works, infers template types from args
     //Matcher::search(graph,0,*(frontiers[0]));
-    for (unsigned i = 1; i < num_threads+1; ++i) {
+    for (unsigned i = 1; i < num_threads; ++i) {
         //threads[i-1] = std::thread(&Matcher::hello_world, i);
-
-        threads[i-1] = std::thread( [&]{ Matcher::search(graph,0,*(frontiers[0])); } );
-        //threads[i-1] = std::thread( [&]{ Matcher::search_slave(graph,frontiers,read_messages,foundPath,finished,i); } );
-        threads[i-1] = std::thread( [&]{ Matcher::search_slave(graph,0,*(frontiers[0])); } );
-
-        /*
-        threads[i-1] = std::thread(&Matcher::search_persistent_baseline<IT,VT>,
-                                    std::ref(graph),
-                                    std::ref(frontiers),
-                                    std::ref(read_messages),
-                                    std::ref(foundPath),
-                                    std::ref(finished),
-                                    i);*/
+        threads[i-1] = std::thread( [&,i]{ Matcher::search_slave(graph,frontiers,foundPath,finished,read_messages,i); } );
 
         // Create a cpu_set_t object representing a set of CPUs. Clear it and mark
         // only CPU i as set.

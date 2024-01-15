@@ -28,8 +28,11 @@ public:
                     FrontierType<IT, StackType> & f);
     template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
     static void search_slave(Graph<IT, VT>& graph, 
-                    const size_t V_index,
-                    FrontierType<IT, StackType> & f);
+                    std::vector<FrontierType<IT, StackType>*> & frontiers,
+                    volatile bool &foundPath,
+                    volatile bool &finished,
+                    std::vector<size_t> &read_messages,
+                    int tid);
     private:
     template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
     static void augment(Graph<IT, VT>& graph, 
@@ -116,8 +119,23 @@ void Matcher::match(Graph<IT, VT>& graph, Statistics<IT>& stats) {
 
 template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
 void Matcher::search_slave(Graph<IT, VT>& graph, 
-                    const size_t V_index,
-                    FrontierType<IT, StackType> & f) {}
+                    std::vector<FrontierType<IT, StackType>*> & frontiers,
+                    volatile bool &foundPath,
+                    volatile bool &finished,
+                    std::vector<size_t> &read_messages,
+                    int tid) {
+    std::cout << "Hello World from Thread " << tid << std::endl;
+    auto allocate_start = high_resolution_clock::now();
+    //Frontier<IT> f(graph.getN(),graph.getM());
+    Frontier<IT,StackType> f(graph.getN(),graph.getM());
+    frontiers[tid]=&f;
+    auto allocate_end = high_resolution_clock::now();
+    auto duration_alloc = duration_cast<milliseconds>(allocate_end - allocate_start);
+    std::cout << "Thread " << tid << " Frontier (9|V|+|E|) memory allocation time: "<< duration_alloc.count() << " milliseconds" << '\n';
+    while(!finished){
+
+    }
+}
 
 
 template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
@@ -314,15 +332,14 @@ void Matcher::match_parallel(Graph<IT, VT>& graph) {
     volatile bool finished = false;
     volatile bool foundPath = false;
     // 8 total, 1 master, 7 slaves.
-    constexpr unsigned num_threads = 7;
-    std::vector<std::thread> threads(num_threads);
+    constexpr unsigned num_threads = 8;
+    std::vector<std::thread> slaves(num_threads-1);
     std::vector<size_t> read_messages;
     std::vector<Frontier<IT,StackType>*> frontiers;
     read_messages.resize(num_threads);
     frontiers.resize(num_threads);
-    auto match_start = high_resolution_clock::now();
     // Access the graph elements as needed
-    ThreadFactory::create_threads_concurrentqueue_baseline(threads, num_threads,read_messages,graph,frontiers,foundPath,finished);
+    ThreadFactory::create_threads_concurrentqueue_baseline(slaves, num_threads,read_messages,graph,frontiers,foundPath,finished);
 
     IT written_messages = 0;
     cpu_set_t my_set;
@@ -331,11 +348,8 @@ void Matcher::match_parallel(Graph<IT, VT>& graph) {
     if (sched_setaffinity(0, sizeof(cpu_set_t), &my_set)) {
         std::cout << "sched_setaffinity error: " << strerror(errno) << std::endl;
     }
-    auto sduration = std::chrono::milliseconds(2000);
-
-    std::this_thread::sleep_for(sduration);
-
-    //while(!finished){}
+    auto match_start = high_resolution_clock::now();
+    Matcher::match<IT, VT, StackType>(graph);
     auto match_end = high_resolution_clock::now();
     auto duration = duration_cast<milliseconds>(match_end - match_start);
 
@@ -344,7 +358,7 @@ void Matcher::match_parallel(Graph<IT, VT>& graph) {
     
     print_results(BenchResult{num_threads, written_messages, read_messages, duration});
 
-    for (auto& t : threads) {
+    for (auto& t : slaves) {
         t.join();
     }
     
