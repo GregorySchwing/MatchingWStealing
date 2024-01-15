@@ -30,7 +30,7 @@ bool StackPusher<IT, VT, StackType>::pushEdgesOntoStack(const Graph<IT, VT>& gra
         // For blossom contraction, need to skip repushing the matched & tree edges
         if (graph.indices[start] == optionalEdge1 || graph.indices[start] == optionalEdge2)
             continue;
-        stack.push(graph.indices[start]);
+        stack.push_back(graph.indices[start]);
 
         nextVertexIndex = Graph<IT, VT>::Other(graph, graph.indices[start], V_index);
 
