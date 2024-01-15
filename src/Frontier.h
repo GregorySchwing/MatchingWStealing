@@ -25,13 +25,23 @@ public:
 
 // Constructor
 template <typename IT, template <typename> class StackType>
-Frontier<IT, StackType>::Frontier(size_t N, size_t M): vertexVector(N), tree(N), path(M), stack(nextPowerOfTwo(M)){
+Frontier<IT, StackType>::Frontier(size_t N, size_t M): 
+vertexVector(N), 
+tree(N), 
+path(M), 
+//stack(nextPowerOfTwo(M)){
+stack(((std::is_same<StackType<IT>, std::deque<IT>>::value) || 
+    (std::is_same<StackType<IT>, std::list<IT>>::value))?0:nextPowerOfTwo(M)){
     dsu.reset(N);
-    if (typeid(StackType<IT>) == typeid(std::list<IT>)){
+    /*
+    if (std::is_same<StackType<IT>, std::list<IT>>::value){
+    //if (typeid(StackType<IT>) == typeid(std::list<IT>)){
         stack.clear();
-    } else if (typeid(StackType<IT>) == typeid(std::deque<IT>)){
+    } else if (std::is_same<StackType<IT>, std::deque<IT>>::value){
+    //} else if (typeid(StackType<IT>) == typeid(std::deque<IT>)){
         stack.clear();
     }
+    */
 }
 
 // Constructor
