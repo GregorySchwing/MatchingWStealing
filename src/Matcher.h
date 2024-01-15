@@ -309,6 +309,7 @@ void Matcher::match_parallel(Graph<IT, VT>& graph) {
     std::vector<size_t> read_messages;
     std::vector<Frontier<IT>*> frontiers;
     read_messages.resize(num_threads);
+    frontiers.resize(num_threads);
     auto match_start = high_resolution_clock::now();
     // Access the graph elements as needed
     ThreadFactory::create_threads_concurrentqueue_baseline(threads, num_threads,read_messages,graph,frontiers,foundPath,finished);

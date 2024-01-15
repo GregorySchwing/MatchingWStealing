@@ -69,6 +69,7 @@ void ThreadFactory::create_threads_concurrentqueue_baseline(std::vector<std::thr
 
     for (unsigned i = 1; i < num_threads+1; ++i) {
         threads[i-1] = std::thread(&Matcher::hello_world, i);
+
         /*
         threads[i-1] = std::thread(&Matcher::search_persistent_baseline<IT,VT>,
                                     std::ref(graph),
