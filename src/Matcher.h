@@ -317,7 +317,7 @@ void Matcher::match_parallel(Graph<IT, VT>& graph) {
     constexpr unsigned num_threads = 7;
     std::vector<std::thread> threads(num_threads);
     std::vector<size_t> read_messages;
-    std::vector<Frontier<IT>*> frontiers;
+    std::vector<Frontier<IT,StackType>*> frontiers;
     read_messages.resize(num_threads);
     frontiers.resize(num_threads);
     auto match_start = high_resolution_clock::now();

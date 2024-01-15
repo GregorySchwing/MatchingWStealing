@@ -48,24 +48,25 @@ void print_results(const BenchResult &results) {
 
 class ThreadFactory {
 public:
-    template <typename IT, typename VT>
-    static void create_threads_concurrentqueue_baseline(std::vector<std::thread> &threads,
-                                                        unsigned num_threads,
-                                                        std::vector<size_t> & read_messages,
-                                                        Graph<IT, VT>& graph,
-                                                        std::vector<Frontier<IT>*> & frontiers,
-                                                        volatile bool &foundPath,
-                                                        volatile bool &finished);
+template <typename IT, typename VT, template <typename> class StackType>
+static void create_threads_concurrentqueue_baseline(std::vector<std::thread> &threads,
+                                                    unsigned num_threads,
+                                                    std::vector<size_t> &read_messages,
+                                                    Graph<IT, VT> &graph,
+                                                    std::vector<Frontier<IT, StackType>*> &frontiers,
+                                                    volatile bool &foundPath,
+                                                    volatile bool &finished);
+
 };
 
-template <typename IT, typename VT>
+template <typename IT, typename VT, template <typename> class StackType>
 void ThreadFactory::create_threads_concurrentqueue_baseline(std::vector<std::thread> &threads,
-                                                                   unsigned num_threads,
-                                                                   std::vector<size_t> & read_messages,
-                                                                   Graph<IT, VT>& graph,
-                                                                   std::vector<Frontier<IT>*> & frontiers,
-                                                                   volatile bool &foundPath,
-                                                                   volatile bool &finished) {
+                                                    unsigned num_threads,
+                                                    std::vector<size_t> &read_messages,
+                                                    Graph<IT, VT> &graph,
+                                                    std::vector<Frontier<IT, StackType>*> &frontiers,
+                                                    volatile bool &foundPath,
+                                                    volatile bool &finished) {
     // Works, infers template types from args
     //Matcher::search(graph,0,*(frontiers[0]));
     for (unsigned i = 1; i < num_threads+1; ++i) {
