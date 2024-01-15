@@ -85,6 +85,12 @@ class WorkStealingQueue {
     */
     bool empty() const noexcept;
     
+    
+    /**
+    @brief clears the queue
+    */
+    void clear();
+
     /**
     @brief queries the number of items at the time of this call
     */
@@ -145,6 +151,14 @@ WorkStealingQueue<T>::~WorkStealingQueue() {
   delete _array.load();
 }
   
+
+// Function: empty
+template <typename T>
+void WorkStealingQueue<T>::clear(){
+  _top.store(0, std::memory_order_relaxed);
+  _bottom.store(0, std::memory_order_relaxed);
+}
+
 // Function: empty
 template <typename T>
 bool WorkStealingQueue<T>::empty() const noexcept {

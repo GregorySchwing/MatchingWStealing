@@ -42,7 +42,8 @@ private:
 template <typename IT, typename VT>
 void Matcher::match(Graph<IT, VT>& graph) {
     auto allocate_start = high_resolution_clock::now();
-    Frontier<IT> f(graph.getN(),graph.getM());
+    //Frontier<IT> f(graph.getN(),graph.getM());
+    Frontier<IT,WorkStealingQueue> f(graph.getN(),graph.getM());
     auto allocate_end = high_resolution_clock::now();
     auto duration_alloc = duration_cast<milliseconds>(allocate_end - allocate_start);
     std::cout << "Frontier (9|V|+|E|) memory allocation time: "<< duration_alloc.count() << " milliseconds" << '\n';

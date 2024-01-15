@@ -48,8 +48,8 @@ void Frontier<IT, StackType>::reinit(){
 // Constructor
 template <typename IT, template <typename> class StackType>
 void Frontier<IT, StackType>::clear(){       
-    //stack.clear();
-    while(stack.pop()){}
+    stack.clear();
+    //while(stack.pop()){}
     tree.clear();
     path.clear();
 }
