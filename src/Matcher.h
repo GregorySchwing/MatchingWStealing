@@ -303,7 +303,8 @@ template <typename IT, typename VT, template <typename> class StackType>
 void Matcher::match_parallel(Graph<IT, VT>& graph) {
     volatile bool finished = false;
     volatile bool foundPath = false;
-    constexpr unsigned num_threads = 4;
+    // 8 total, 1 master, 7 slaves.
+    constexpr unsigned num_threads = 7;
     std::vector<std::thread> threads(num_threads);
     std::vector<size_t> read_messages;
     std::vector<Frontier<IT>*> frontiers;
