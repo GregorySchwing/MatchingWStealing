@@ -15,9 +15,9 @@
 
 class Matcher {
 public:
-    template <typename IT, typename VT>
+    template <typename IT, typename VT, template <typename> class StackType = Stack>
     static void match(Graph<IT, VT>& graph);
-    template <typename IT, typename VT>
+    template <typename IT, typename VT, template <typename> class StackType = Stack>
     static void match(Graph<IT, VT>& graph, Statistics<IT>& stats);
 
 private:
@@ -39,11 +39,11 @@ private:
                         Stack<IT> & path);
 };
 
-template <typename IT, typename VT>
+template <typename IT, typename VT, template <typename> class StackType>
 void Matcher::match(Graph<IT, VT>& graph) {
     auto allocate_start = high_resolution_clock::now();
     //Frontier<IT> f(graph.getN(),graph.getM());
-    Frontier<IT,WorkStealingQueue> f(graph.getN(),graph.getM());
+    Frontier<IT,StackType> f(graph.getN(),graph.getM());
     auto allocate_end = high_resolution_clock::now();
     auto duration_alloc = duration_cast<milliseconds>(allocate_end - allocate_start);
     std::cout << "Frontier (9|V|+|E|) memory allocation time: "<< duration_alloc.count() << " milliseconds" << '\n';
@@ -69,11 +69,11 @@ void Matcher::match(Graph<IT, VT>& graph) {
 }
 
 
-template <typename IT, typename VT>
+template <typename IT, typename VT, template <typename> class StackType>
 void Matcher::match(Graph<IT, VT>& graph, Statistics<IT>& stats) {
     auto allocate_start = high_resolution_clock::now();
     //Frontier<IT> f(graph.getN(),graph.getM());
-    Frontier<IT,WorkStealingQueue> f(graph.getN(),graph.getM());
+    Frontier<IT,StackType> f(graph.getN(),graph.getM());
     auto allocate_end = high_resolution_clock::now();
     auto duration_alloc = duration_cast<milliseconds>(allocate_end - allocate_start);
     std::cout << "Frontier (9|V|+|E|) memory allocation time: "<< duration_alloc.count() << " milliseconds" << '\n';
@@ -124,11 +124,15 @@ Vertex<IT> * Matcher::search(Graph<IT, VT>& graph,
     //Graph<IT,VT>::pushEdgesOntoStack(graph,vertexVector,V_index,stack);
     StackPusher<IT,VT,StackType>::pushEdgesOntoStack(graph,vertexVector,V_index,stack);
     while(!stack.empty()){
+        /*
         std::optional<IT> stackEdgeOpt = stack.pop();
         if (stackEdgeOpt.has_value())
             stackEdge = stackEdgeOpt.value();
         else
             continue;
+        */
+        stackEdge = stack.back();
+        stack.pop_back();
         //stack.pop_back();
         // Necessary because vertices dont know their own index.
         // It simplifies vector creation..
