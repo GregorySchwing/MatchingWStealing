@@ -23,6 +23,7 @@ int main(int argc, char **argv) {
     // A map is used for the frontier to limit copying N vertices.
     //std::unordered_map<int64_t, Vertex<int64_t>> vertexMap;
     // A vector is used for the frontier to allocate once all the memory ever needed.
+    std::cout << "\nVector-based stack\n";
     auto allocate_start = high_resolution_clock::now();
     G.matching.resize(G.getN(),-1);
     auto allocate_end = high_resolution_clock::now();
@@ -34,11 +35,12 @@ int main(int argc, char **argv) {
     auto duration = duration_cast<seconds>(match_end - match_start);
     std::cout << "Maximum matching time: "<< duration.count() << " seconds" << '\n';
     auto count = std::count_if(G.matching.begin(), G.matching.end(),[&](auto const& val){ return val > -1; });
-    std::cout << "Maximum matching size: "<<  count/2 << '\n';
+    std::cout << "Maximum matching size: "<<  count/2 << "\n\n";
     G.matching.clear();
     // A map is used for the frontier to limit copying N vertices.
     //std::unordered_map<int64_t, Vertex<int64_t>> vertexMap;
     // A vector is used for the frontier to allocate once all the memory ever needed.
+    std::cout << "std::deque based stack\n";
     allocate_start = high_resolution_clock::now();
     G.matching.resize(G.getN(),-1);
     allocate_end = high_resolution_clock::now();
@@ -50,11 +52,12 @@ int main(int argc, char **argv) {
     duration = duration_cast<seconds>(match_end - match_start);
     std::cout << "Maximum matching time: "<< duration.count() << " seconds" << '\n';
     count = std::count_if(G.matching.begin(), G.matching.end(),[&](auto const& val){ return val > -1; });
-    std::cout << "Maximum matching size: "<<  count/2 << '\n';
+    std::cout << "Maximum matching size: "<<  count/2 << "\n\n";
     G.matching.clear();
     // A map is used for the frontier to limit copying N vertices.
     //std::unordered_map<int64_t, Vertex<int64_t>> vertexMap;
     // A vector is used for the frontier to allocate once all the memory ever needed.
+    std::cout << "std::list based stack\n";
     allocate_start = high_resolution_clock::now();
     G.matching.resize(G.getN(),-1);
     allocate_end = high_resolution_clock::now();
@@ -66,11 +69,12 @@ int main(int argc, char **argv) {
     duration = duration_cast<seconds>(match_end - match_start);
     std::cout << "Maximum matching time: "<< duration.count() << " seconds" << '\n';
     count = std::count_if(G.matching.begin(), G.matching.end(),[&](auto const& val){ return val > -1; });
-    std::cout << "Maximum matching size: "<<  count/2 << '\n';
+    std::cout << "Maximum matching size: "<<  count/2 << "\n\n";
     G.matching.clear();
     // A map is used for the frontier to limit copying N vertices.
     //std::unordered_map<int64_t, Vertex<int64_t>> vertexMap;
     // A vector is used for the frontier to allocate once all the memory ever needed.
+    std::cout << "Work-stealing queue (atomic-deque) based stack\n";
     allocate_start = high_resolution_clock::now();
     G.matching.resize(G.getN(),-1);
     allocate_end = high_resolution_clock::now();
@@ -82,7 +86,7 @@ int main(int argc, char **argv) {
     duration = duration_cast<seconds>(match_end - match_start);
     std::cout << "Maximum matching time: "<< duration.count() << " seconds" << '\n';
     count = std::count_if(G.matching.begin(), G.matching.end(),[&](auto const& val){ return val > -1; });
-    std::cout << "Maximum matching size: "<<  count/2 << '\n';
+    std::cout << "Maximum matching size: "<<  count/2 << "\n\n";
 
     return 0;
 }
