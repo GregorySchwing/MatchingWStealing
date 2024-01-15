@@ -115,6 +115,10 @@ class WorkStealingQueue {
     template <typename O>
     void push(O&& item);
     
+    // Push alias
+    template <typename O>
+    void push_back(O&& item);
+    
     /**
     @brief pops out an item from the queue
 
@@ -123,6 +127,11 @@ class WorkStealingQueue {
     */
     std::optional<T> pop();
     
+    // R-value alias of pop
+    void pop_back();
+    // R-value alias of pop
+    T back();
+
     /**
     @brief steals an item from the queue
 
@@ -196,6 +205,29 @@ void WorkStealingQueue<T>::push(O&& o) {
   _bottom.store(b + 1, std::memory_order_relaxed);
 }
 
+
+// Function: push
+template <typename T>
+template <typename O>
+void WorkStealingQueue<T>::push_back(O&& o) {
+  int64_t b = _bottom.load(std::memory_order_relaxed);
+  int64_t t = _top.load(std::memory_order_acquire);
+  Array* a = _array.load(std::memory_order_relaxed);
+
+  // queue is full
+  if(a->capacity() - 1 < (b - t)) {
+    Array* tmp = a->resize(b, t);
+    _garbage.push_back(a);
+    std::swap(a, tmp);
+    _array.store(a, std::memory_order_relaxed);
+  }
+
+  a->push(b, std::forward<O>(o));
+  std::atomic_thread_fence(std::memory_order_release);
+  _bottom.store(b + 1, std::memory_order_relaxed);
+}
+
+
 // Function: pop
 template <typename T>
 std::optional<T> WorkStealingQueue<T>::pop() {
@@ -225,6 +257,43 @@ std::optional<T> WorkStealingQueue<T>::pop() {
 
   return item;
 }
+
+// Function: pop
+template <typename T>
+void WorkStealingQueue<T>::pop_back() {}
+
+// Function: pop
+template <typename T>
+T WorkStealingQueue<T>::back() {
+  int64_t b = _bottom.load(std::memory_order_relaxed) - 1;
+  Array* a = _array.load(std::memory_order_relaxed);
+  _bottom.store(b, std::memory_order_relaxed);
+  std::atomic_thread_fence(std::memory_order_seq_cst);
+  int64_t t = _top.load(std::memory_order_relaxed);
+
+  std::optional<T> item;
+
+  if(t <= b) {
+    item = a->pop(b);
+    if(t == b) {
+      // the last item just got stolen
+      if(!_top.compare_exchange_strong(t, t+1, 
+                                       std::memory_order_seq_cst, 
+                                       std::memory_order_relaxed)) {
+        item = std::nullopt;
+      }
+      _bottom.store(b + 1, std::memory_order_relaxed);
+    }
+  }
+  else {
+    _bottom.store(b + 1, std::memory_order_relaxed);
+  }
+  if (item.has_value())
+    return item.value();
+  else
+    return -1;
+}
+
 
 // Function: steal
 template <typename T>

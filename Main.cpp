@@ -28,31 +28,13 @@ int main(int argc, char **argv) {
     auto allocate_end = high_resolution_clock::now();
     auto duration_alloc = duration_cast<milliseconds>(allocate_end - allocate_start);
     std::cout << "Matching (|V|) memory allocation time: "<< duration_alloc.count() << " milliseconds" << '\n';
-    Statistics<int64_t> stats(G.getN());
     auto match_start = high_resolution_clock::now();
-    Matcher::match<int64_t, std::string, Stack>(G,stats);
+    Matcher::match<int64_t, std::string, Stack>(G);
     auto match_end = high_resolution_clock::now();
     auto duration = duration_cast<seconds>(match_end - match_start);
     std::cout << "Maximum matching time: "<< duration.count() << " seconds" << '\n';
     auto count = std::count_if(G.matching.begin(), G.matching.end(),[&](auto const& val){ return val > -1; });
     std::cout << "Maximum matching size: "<<  count/2 << '\n';
-    std::vector<int64_t> match_count(G.getM(),0);
-    // Iterate through the matching vector and update the match_count array
-    for (auto const& val : G.matching) {
-        if (val > -1 && static_cast<size_t>(val) < match_count.size()) {
-            // Increment the count at the specified index
-            match_count[val]++;
-        }
-    }
-    // Check if each value in match_count is either 0 or 2
-    for (size_t i = 0; i < match_count.size(); ++i) {
-        if (match_count[i] != 0 && match_count[i] != 2) {
-            throw std::runtime_error("Error: Match count is not equal to 0 or 2");
-        }
-    }
-    std::cout << "Maximum matching is valid." << '\n';
-    // Writing data to file
-    stats.write_file(argv[1]);
     G.matching.clear();
     // A map is used for the frontier to limit copying N vertices.
     //std::unordered_map<int64_t, Vertex<int64_t>> vertexMap;
@@ -62,17 +44,45 @@ int main(int argc, char **argv) {
     allocate_end = high_resolution_clock::now();
     duration_alloc = duration_cast<milliseconds>(allocate_end - allocate_start);
     std::cout << "Matching (|V|) memory allocation time: "<< duration_alloc.count() << " milliseconds" << '\n';
-    Statistics<int64_t> stats2(G.getN());
     match_start = high_resolution_clock::now();
-    Matcher::match<int64_t, std::string, std::deque>(G,stats2);
+    Matcher::match<int64_t, std::string, std::deque>(G);
     match_end = high_resolution_clock::now();
     duration = duration_cast<seconds>(match_end - match_start);
     std::cout << "Maximum matching time: "<< duration.count() << " seconds" << '\n';
     count = std::count_if(G.matching.begin(), G.matching.end(),[&](auto const& val){ return val > -1; });
     std::cout << "Maximum matching size: "<<  count/2 << '\n';
-    std::cout << "Maximum matching is valid." << '\n';
-    // Writing data to file
-    stats2.write_file(argv[2]);
+    G.matching.clear();
+    // A map is used for the frontier to limit copying N vertices.
+    //std::unordered_map<int64_t, Vertex<int64_t>> vertexMap;
+    // A vector is used for the frontier to allocate once all the memory ever needed.
+    allocate_start = high_resolution_clock::now();
+    G.matching.resize(G.getN(),-1);
+    allocate_end = high_resolution_clock::now();
+    duration_alloc = duration_cast<milliseconds>(allocate_end - allocate_start);
+    std::cout << "Matching (|V|) memory allocation time: "<< duration_alloc.count() << " milliseconds" << '\n';
+    match_start = high_resolution_clock::now();
+    Matcher::match<int64_t, std::string, std::list>(G);
+    match_end = high_resolution_clock::now();
+    duration = duration_cast<seconds>(match_end - match_start);
+    std::cout << "Maximum matching time: "<< duration.count() << " seconds" << '\n';
+    count = std::count_if(G.matching.begin(), G.matching.end(),[&](auto const& val){ return val > -1; });
+    std::cout << "Maximum matching size: "<<  count/2 << '\n';
+    G.matching.clear();
+    // A map is used for the frontier to limit copying N vertices.
+    //std::unordered_map<int64_t, Vertex<int64_t>> vertexMap;
+    // A vector is used for the frontier to allocate once all the memory ever needed.
+    allocate_start = high_resolution_clock::now();
+    G.matching.resize(G.getN(),-1);
+    allocate_end = high_resolution_clock::now();
+    duration_alloc = duration_cast<milliseconds>(allocate_end - allocate_start);
+    std::cout << "Matching (|V|) memory allocation time: "<< duration_alloc.count() << " milliseconds" << '\n';
+    match_start = high_resolution_clock::now();
+    Matcher::match<int64_t, std::string, WorkStealingQueue>(G);
+    match_end = high_resolution_clock::now();
+    duration = duration_cast<seconds>(match_end - match_start);
+    std::cout << "Maximum matching time: "<< duration.count() << " seconds" << '\n';
+    count = std::count_if(G.matching.begin(), G.matching.end(),[&](auto const& val){ return val > -1; });
+    std::cout << "Maximum matching size: "<<  count/2 << '\n';
 
     return 0;
 }
