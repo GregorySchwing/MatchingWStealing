@@ -27,6 +27,11 @@ public:
 template <typename IT, template <typename> class StackType>
 Frontier<IT, StackType>::Frontier(size_t N, size_t M): vertexVector(N), tree(N), path(M), stack(nextPowerOfTwo(M)){
     dsu.reset(N);
+    if (typeid(StackType<IT>) == typeid(std::list<IT>)){
+        stack.clear();
+    } else if (typeid(StackType<IT>) == typeid(std::deque<IT>)){
+        stack.clear();
+    }
 }
 
 // Constructor
