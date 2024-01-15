@@ -30,12 +30,14 @@ int main(int argc, char **argv) {
     auto duration_alloc = duration_cast<milliseconds>(allocate_end - allocate_start);
     std::cout << "Matching (|V|) memory allocation time: "<< duration_alloc.count() << " milliseconds" << '\n';
     auto match_start = high_resolution_clock::now();
-    Matcher::match<int64_t, std::string, Stack>(G);
+    //Matcher::match<int64_t, std::string, Stack>(G);
+    Matcher::match_parallel<int64_t, std::string, Stack>(G);
     auto match_end = high_resolution_clock::now();
     auto duration = duration_cast<seconds>(match_end - match_start);
     std::cout << "Maximum matching time: "<< duration.count() << " seconds" << '\n';
     auto count = std::count_if(G.matching.begin(), G.matching.end(),[&](auto const& val){ return val > -1; });
     std::cout << "Maximum matching size: "<<  count/2 << "\n\n";
+    return 1;
     G.matching.clear();
     // A map is used for the frontier to limit copying N vertices.
     //std::unordered_map<int64_t, Vertex<int64_t>> vertexMap;

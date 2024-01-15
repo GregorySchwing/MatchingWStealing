@@ -18,8 +18,10 @@ public:
     template <typename IT, typename VT, template <typename> class StackType = Stack>
     static void match(Graph<IT, VT>& graph);
     template <typename IT, typename VT, template <typename> class StackType = Stack>
+    static void match_parallel(Graph<IT, VT>& graph);
+    template <typename IT, typename VT, template <typename> class StackType = Stack>
     static void match(Graph<IT, VT>& graph, Statistics<IT>& stats);
-
+    static void hello_world(int tid);
 private:
     template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
     static Vertex<IT> * search(Graph<IT, VT>& graph, 
@@ -38,6 +40,11 @@ private:
                         //std::list<IT> & path,
                         Stack<IT> & path);
 };
+
+void Matcher::hello_world(int tid) {
+    // Get the Thread ID (TID)
+    std::cout << "Hello World from Thread " << tid << std::endl;
+}
 
 template <typename IT, typename VT, template <typename> class StackType>
 void Matcher::match(Graph<IT, VT>& graph) {
@@ -287,6 +294,48 @@ void Matcher::pathThroughBlossom(Graph<IT, VT>& graph,
         }
     }
 }
+// Needs to be after Matcher definition.
+// Not sure how to fix this.
+#include "ThreadFactory.h"
 
 
+template <typename IT, typename VT, template <typename> class StackType>
+void Matcher::match_parallel(Graph<IT, VT>& graph) {
+    volatile bool finished = false;
+    volatile bool foundPath = false;
+    constexpr unsigned num_threads = 4;
+    std::vector<std::thread> threads(num_threads);
+    std::vector<size_t> read_messages;
+    std::vector<Frontier<IT>*> frontiers;
+    read_messages.resize(num_threads);
+    auto match_start = high_resolution_clock::now();
+    // Access the graph elements as needed
+    ThreadFactory::create_threads_concurrentqueue_baseline(threads, num_threads,read_messages,graph,frontiers,foundPath,finished);
+
+    IT written_messages = 0;
+    cpu_set_t my_set;
+    CPU_ZERO(&my_set);
+    CPU_SET(0, &my_set);
+    if (sched_setaffinity(0, sizeof(cpu_set_t), &my_set)) {
+        std::cout << "sched_setaffinity error: " << strerror(errno) << std::endl;
+    }
+    auto sduration = std::chrono::milliseconds(2000);
+
+    std::this_thread::sleep_for(sduration);
+
+    //while(!finished){}
+    auto match_end = high_resolution_clock::now();
+    auto duration = duration_cast<milliseconds>(match_end - match_start);
+
+    finished=true;
+
+    
+    print_results(BenchResult{num_threads, written_messages, read_messages, duration});
+
+    for (auto& t : threads) {
+        t.join();
+    }
+    
+    return;
+}
 #endif
