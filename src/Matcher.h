@@ -34,6 +34,15 @@ public:
                     std::vector<size_t> &read_messages,
                     int tid);
     private:
+    template <typename IT, typename VT, template <typename> class StackType>
+    static void match_master(std::vector<std::thread> &threads,
+                                                        unsigned num_threads,
+                                                        std::vector<size_t> &read_messages,
+                                                        Graph<IT, VT> &graph,
+                                                        std::vector<Frontier<IT, StackType>*> &frontiers,
+                                                        volatile bool &foundPath,
+                                                        volatile bool &finished);
+
     template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
     static void augment(Graph<IT, VT>& graph, 
                     Vertex<IT> * TailOfAugmentingPath,
@@ -51,6 +60,43 @@ public:
 void Matcher::hello_world(int tid) {
     // Get the Thread ID (TID)
     std::cout << "Hello World from Thread " << tid << std::endl;
+}
+
+template <typename IT, typename VT, template <typename> class StackType>
+void Matcher::match_master(std::vector<std::thread> &threads,
+                                                    unsigned num_threads,
+                                                    std::vector<size_t> &read_messages,
+                                                    Graph<IT, VT> &graph,
+                                                    std::vector<Frontier<IT, StackType>*> &frontiers,
+                                                    volatile bool &foundPath,
+                                                    volatile bool &finished){
+    IT tid = 0;
+    auto allocate_start = high_resolution_clock::now();
+    //Frontier<IT> f(graph.getN(),graph.getM());
+    Frontier<IT,StackType> f(graph.getN(),graph.getM());
+    frontiers[tid] = &f;
+    auto allocate_end = high_resolution_clock::now();
+    auto duration_alloc = duration_cast<milliseconds>(allocate_end - allocate_start);
+    std::cout << "Frontier (9|V|+|E|) memory allocation time: "<< duration_alloc.count() << " milliseconds" << '\n';
+    Vertex<IT> * TailOfAugmentingPath;
+    // Access the graph elements as needed
+    for (std::size_t i = 0; i < graph.getN(); ++i) {
+        if (graph.matching[i] < 0) {
+            //printf("SEARCHING FROM %ld!\n",i);
+            // Your matching logic goes here...
+            TailOfAugmentingPath=search(graph,i,f);
+            // If not a nullptr, I found an AP.
+            if (TailOfAugmentingPath){
+                augment(graph,TailOfAugmentingPath,f);
+                f.reinit();
+                f.clear();
+                //printf("FOUND AP!\n");
+            } else {
+                f.clear();
+                //printf("DIDNT FOUND AP!\n");
+            }
+        }
+    }
 }
 
 template <typename IT, typename VT, template <typename> class StackType>
@@ -349,7 +395,7 @@ void Matcher::match_parallel(Graph<IT, VT>& graph) {
         std::cout << "sched_setaffinity error: " << strerror(errno) << std::endl;
     }
     auto match_start = high_resolution_clock::now();
-    Matcher::match<IT, VT, StackType>(graph);
+    Matcher::match_master<IT, VT, StackType>(slaves, num_threads,read_messages,graph,frontiers,foundPath,finished);
     auto match_end = high_resolution_clock::now();
     auto duration = duration_cast<milliseconds>(match_end - match_start);
 
