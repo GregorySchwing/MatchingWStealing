@@ -12,6 +12,7 @@
 #include "Frontier.h"
 #include "Statistics.h"
 #include "StackPusher.h"
+#include "ARRStackPusher.h"
 
 class Matcher {
 public:
@@ -206,6 +207,7 @@ void Matcher::search_master(Graph<IT, VT>& graph,
     nextVertex = &vertexVector[V_index];
     tree.push_back(V_index);
     nextVertex->AgeField=time++;
+    ARRStackPusher::pushEdgesOntoStack<IT,VT,FrontierType>(graph,vertexVector,V_index,frontiers,tid);
     StackPusher<IT,VT,StackType>::pushEdgesOntoStack(graph,vertexVector,V_index,stack);
     while(!stack.empty()){
         stackEdge = stack.back();
