@@ -43,7 +43,9 @@ public:
                     volatile bool &foundPath,
                     volatile bool &finished,
                     std::vector<size_t> &read_messages,
-                    int tid);
+                    int tid,
+                    std::mutex & mtx,
+                    std::condition_variable & cv);
     private:
     template <typename IT, typename VT, template <typename> class StackType>
     static void match_master(std::vector<std::thread> &threads,
@@ -172,7 +174,9 @@ void Matcher::search_worker(
                     volatile bool &foundPath,
                     volatile bool &finished,
                     std::vector<size_t> &read_messages,
-                    int tid) {
+                    int tid,
+                    std::mutex & mtx,
+                    std::condition_variable & cv) {
     Vertex<int64_t> *FromBase,*ToBase, *nextVertex;
     int64_t FromBaseVertexID,ToBaseVertexID;
     IT stackEdge, matchedEdge;
@@ -196,7 +200,8 @@ void Matcher::search_worker(
     while (!finished) {
         if(!worklist.try_dequeue(V_index))
             continue;
-        read_messages[tid-1]++;
+        std::cout << "Thread " << tid << " Dequeued v: "<< V_index << std::endl;
+        read_messages[tid]++;
         time = 0;
         nextVertex = &vertexVector[V_index];
         tree.push_back(V_index);
@@ -231,6 +236,7 @@ void Matcher::search_worker(
                 //graph.SetMatchField(ToBaseVertexID,stackEdge);
                 // I'll let the augment path method recover the path.
                 augment(graph,ToBase,f);
+                foundPath = true;
                 break;
             } else if (!ToBase->IsReached() && graph.IsMatched(ToBaseVertexID)){
                 ToBase->TreeField=stackEdge;
@@ -254,6 +260,17 @@ void Matcher::search_worker(
         }
         f.reinit();
         f.clear();
+        std::cout << "Worker " << tid << " found the answer: " << std::endl;
+
+        // Lock the mutex before modifying shared data
+        std::unique_lock<std::mutex> lock(mtx);
+        std::cout << "Worker " << tid << " got mutex" << std::endl;
+
+        // Update the result and notify the master thread
+        foundPath = false;
+
+        // Notify the master thread
+        cv.notify_one();
     }
 }
 
@@ -521,17 +538,21 @@ template <typename IT, typename VT, template <typename> class StackType>
 void Matcher::match_parallel(Graph<IT, VT>& graph) {
     volatile bool finished = false;
     volatile bool foundPath = false;
+
+    // This will take the place of foundPath/finished on a vertex
+    std::mutex mtx;
+    std::condition_variable cv;
     // Multi-producer; Multi-consumer queue, aka worklist
     // Start off by using it as a dynamic allocator of work.
     size_t capacity = 1;
     moodycamel::ConcurrentQueue<IT> worklist{capacity};
     // 8 workers.
-    constexpr unsigned num_threads = 8;
+    constexpr unsigned num_threads = 1;
     std::vector<std::thread> workers(num_threads);
     std::vector<size_t> read_messages;
     read_messages.resize(num_threads);
     // Access the graph elements as needed
-    ThreadFactory::create_threads_concurrentqueue_baseline<IT,VT,StackType>(workers, num_threads,read_messages,worklist,graph,foundPath,finished);
+    ThreadFactory::create_threads_concurrentqueue_baseline<IT,VT,StackType>(workers, num_threads,read_messages,worklist,graph,foundPath,finished,mtx,cv);
 
     IT written_messages = 0;
     cpu_set_t my_set;
@@ -541,11 +562,24 @@ void Matcher::match_parallel(Graph<IT, VT>& graph) {
         std::cout << "sched_setaffinity error: " << strerror(errno) << std::endl;
     }
     auto match_start = high_resolution_clock::now();
+
+
+    for (std::size_t i = 0; i < graph.getN(); ++i) {
+        if (graph.matching[i] < 0) {
+            std::cout << "Master thread enqueuing: v: " << i << std::endl;
+            worklist.enqueue(i);
+            // Lock the mutex before waiting
+            std::unique_lock<std::mutex> lock(mtx);
+            // Wait until an answer is found by a worker
+            cv.wait(lock);
+            std::cout << "Master thread continues with the result: v: " << i << "Found path :" << foundPath << std::endl;
+        }
+    }
+
     //Matcher::match_master<IT, VT, StackType>(workers, num_threads,read_messages,graph,frontiers,foundPath,finished);
     auto match_end = high_resolution_clock::now();
 
     auto duration = duration_cast<milliseconds>(match_end - match_start);
-    std::this_thread::sleep_for(std::chrono::seconds(2));
 
     finished=true;
 
