@@ -13,6 +13,7 @@
 #include "Statistics.h"
 #include "StackPusher.h"
 #include "ARRStackPusher.h"
+#include "concurrentqueue.h"
 
 class Matcher {
 public:
@@ -35,9 +36,10 @@ public:
     static Vertex<IT> * search(Graph<IT, VT>& graph, 
                     const size_t V_index,
                     FrontierType<IT, StackType> & f);
-    template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
-    static void search_slave(Graph<IT, VT>& graph, 
-                    std::vector<FrontierType<IT, StackType>*> & frontiers,
+    template <typename IT, typename VT, template <typename> class StackType>
+    static void search_worker(
+                    moodycamel::ConcurrentQueue<IT> &worklist,
+                    Graph<IT, VT>& graph, 
                     volatile bool &foundPath,
                     volatile bool &finished,
                     std::vector<size_t> &read_messages,
@@ -163,9 +165,10 @@ void Matcher::match(Graph<IT, VT>& graph, Statistics<IT>& stats) {
 }
 
 
-template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
-void Matcher::search_slave(Graph<IT, VT>& graph, 
-                    std::vector<FrontierType<IT, StackType>*> & frontiers,
+template <typename IT, typename VT, template <typename> class StackType>
+void Matcher::search_worker(
+                    moodycamel::ConcurrentQueue<IT> &worklist,
+                    Graph<IT, VT>& graph, 
                     volatile bool &foundPath,
                     volatile bool &finished,
                     std::vector<size_t> &read_messages,
@@ -174,7 +177,6 @@ void Matcher::search_slave(Graph<IT, VT>& graph,
     auto allocate_start = high_resolution_clock::now();
     //Frontier<IT> f(graph.getN(),graph.getM());
     Frontier<IT,StackType> f(graph.getN(),graph.getM());
-    frontiers[tid]=&f;
     auto allocate_end = high_resolution_clock::now();
     auto duration_alloc = duration_cast<milliseconds>(allocate_end - allocate_start);
     std::cout << "Thread " << tid << " Frontier (9|V|+|E|) memory allocation time: "<< duration_alloc.count() << " milliseconds" << '\n';
@@ -444,22 +446,23 @@ void Matcher::pathThroughBlossom(Graph<IT, VT>& graph,
 }
 // Needs to be after Matcher definition.
 // Not sure how to fix this.
-#include "ThreadFactory.h"
-
+#include "ThreadFactory2.h"
 
 template <typename IT, typename VT, template <typename> class StackType>
 void Matcher::match_parallel(Graph<IT, VT>& graph) {
     volatile bool finished = false;
     volatile bool foundPath = false;
-    // 8 total, 1 master, 7 slaves.
+    // Multi-producer; Multi-consumer queue, aka worklist
+    // Start off by using it as a dynamic allocator of work.
+    size_t capacity = 1;
+    moodycamel::ConcurrentQueue<IT> worklist{capacity};
+    // 8 workers.
     constexpr unsigned num_threads = 8;
-    std::vector<std::thread> slaves(num_threads-1);
+    std::vector<std::thread> workers(num_threads);
     std::vector<size_t> read_messages;
-    std::vector<Frontier<IT,StackType>*> frontiers;
     read_messages.resize(num_threads);
-    frontiers.resize(num_threads);
     // Access the graph elements as needed
-    ThreadFactory::create_threads_concurrentqueue_baseline(slaves, num_threads,read_messages,graph,frontiers,foundPath,finished);
+    ThreadFactory::create_threads_concurrentqueue_baseline<IT,VT,StackType>(workers, num_threads,read_messages,worklist,graph,foundPath,finished);
 
     IT written_messages = 0;
     cpu_set_t my_set;
@@ -469,16 +472,18 @@ void Matcher::match_parallel(Graph<IT, VT>& graph) {
         std::cout << "sched_setaffinity error: " << strerror(errno) << std::endl;
     }
     auto match_start = high_resolution_clock::now();
-    Matcher::match_master<IT, VT, StackType>(slaves, num_threads,read_messages,graph,frontiers,foundPath,finished);
+    //Matcher::match_master<IT, VT, StackType>(workers, num_threads,read_messages,graph,frontiers,foundPath,finished);
     auto match_end = high_resolution_clock::now();
+
     auto duration = duration_cast<milliseconds>(match_end - match_start);
+    std::this_thread::sleep_for(std::chrono::seconds(2));
 
     finished=true;
 
     
     print_results(BenchResult{num_threads, written_messages, read_messages, duration});
 
-    for (auto& t : slaves) {
+    for (auto& t : workers) {
         t.join();
     }
     

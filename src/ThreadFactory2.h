@@ -1,6 +1,5 @@
-
-#ifndef THREAD_FACTORY_H
-#define THREAD_FACTORY_H
+#ifndef THREAD_FACTORY2_H
+#define THREAD_FACTORY2_H
 #include <vector>
 #include <thread>
 #include <mutex>
@@ -45,46 +44,44 @@ void print_results(const BenchResult &results) {
 #include <iostream>
 #include <vector>
 #include <thread>
+#include "concurrentqueue.h"
 
 class ThreadFactory {
 public:
-template <typename IT, typename VT, template <typename> class StackType>
-static void create_threads_concurrentqueue_baseline(std::vector<std::thread> &threads,
+    template <typename IT, typename VT, template <typename> class StackType>
+    static bool create_threads_concurrentqueue_baseline(std::vector<std::thread> &threads,
                                                     unsigned num_threads,
                                                     std::vector<size_t> &read_messages,
+                                                    moodycamel::ConcurrentQueue<IT> &worklist,
                                                     Graph<IT, VT> &graph,
-                                                    std::vector<Frontier<IT, StackType>*> &frontiers,
                                                     volatile bool &foundPath,
                                                     volatile bool &finished);
-
 };
 
 template <typename IT, typename VT, template <typename> class StackType>
-void ThreadFactory::create_threads_concurrentqueue_baseline(std::vector<std::thread> &threads,
+bool ThreadFactory::create_threads_concurrentqueue_baseline(std::vector<std::thread> &threads,
                                                     unsigned num_threads,
                                                     std::vector<size_t> &read_messages,
+                                                    moodycamel::ConcurrentQueue<IT> &worklist,
                                                     Graph<IT, VT> &graph,
-                                                    std::vector<Frontier<IT, StackType>*> &frontiers,
                                                     volatile bool &foundPath,
                                                     volatile bool &finished) {
     // Works, infers template types from args
     //Matcher::search(graph,0,*(frontiers[0]));
-    for (unsigned i = 1; i < num_threads; ++i) {
-        //threads[i-1] = std::thread(&Matcher::hello_world, i);
-        threads[i-1] = std::thread( [&,i]{ Matcher::search_slave(graph,frontiers,foundPath,finished,read_messages,i); } );
+    for (unsigned i = 0; i < num_threads; ++i) {
+        //threads[i] = std::thread(&Matcher::hello_world, i);
+        threads[i] = std::thread( [&,i]{ Matcher::search_worker<IT,VT,StackType>(worklist,graph,foundPath,finished,read_messages,i); } );
 
         // Create a cpu_set_t object representing a set of CPUs. Clear it and mark
         // only CPU i as set.
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
         CPU_SET(i, &cpuset);
-        int rc = pthread_setaffinity_np(threads[i-1].native_handle(),
+        int rc = pthread_setaffinity_np(threads[i].native_handle(),
                                         sizeof(cpu_set_t), &cpuset);
         if (rc != 0) {
             std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
         }
     }
 }
-
-
-#endif // THREAD_FACTORY_H
+#endif
