@@ -173,6 +173,12 @@ void Matcher::search_worker(
                     volatile bool &finished,
                     std::vector<size_t> &read_messages,
                     int tid) {
+    Vertex<int64_t> *FromBase,*ToBase, *nextVertex;
+    int64_t FromBaseVertexID,ToBaseVertexID;
+    IT stackEdge, matchedEdge;
+    IT nextVertexIndex;
+    IT time;
+
     std::cout << "Hello World from Thread " << tid << std::endl;
     auto allocate_start = high_resolution_clock::now();
     //Frontier<IT> f(graph.getN(),graph.getM());
@@ -180,11 +186,74 @@ void Matcher::search_worker(
     auto allocate_end = high_resolution_clock::now();
     auto duration_alloc = duration_cast<milliseconds>(allocate_end - allocate_start);
     std::cout << "Thread " << tid << " Frontier (9|V|+|E|) memory allocation time: "<< duration_alloc.count() << " milliseconds" << '\n';
-    f.waiting=true;
-    while(!finished){
-        while(f.waiting && !finished){
 
+
+    StackType<IT> &stack = f.stack;
+    Stack<IT> &tree = f.tree;
+    DisjointSetUnion<IT> &dsu = f.dsu;
+    std::vector<Vertex<IT>> & vertexVector = f.vertexVector;
+    IT V_index;
+    while (!finished) {
+        if(!worklist.try_dequeue(V_index))
+            continue;
+        read_messages[tid-1]++;
+        time = 0;
+        nextVertex = &vertexVector[V_index];
+        tree.push_back(V_index);
+        nextVertex->AgeField=time++;
+        StackPusher<IT,VT,StackType>::pushEdgesOntoStack(graph,vertexVector,V_index,stack);
+        while(!stack.empty()){
+            stackEdge = stack.back();
+            stack.pop_back();
+            //stack.pop_back();
+            // Necessary because vertices dont know their own index.
+            // It simplifies vector creation..
+            FromBaseVertexID = dsu[Graph<IT,VT>::EdgeFrom(graph,stackEdge)];
+            FromBase = &vertexVector[FromBaseVertexID];
+
+            // Necessary because vertices dont know their own index.
+            // It simplifies vector creation..
+            ToBaseVertexID = dsu[Graph<IT,VT>::EdgeTo(graph,stackEdge)];
+            ToBase = &vertexVector[ToBaseVertexID];
+
+            // Edge is between two vertices in the same blossom, continue.
+            if (FromBase == ToBase)
+                continue;
+            if(!FromBase->IsEven()){
+                std::swap(FromBase,ToBase);
+                std::swap(FromBaseVertexID,ToBaseVertexID);
+            }
+            // An unreached, unmatched vertex is found, AN AUGMENTING PATH!
+            if (!ToBase->IsReached() && !graph.IsMatched(ToBaseVertexID)){
+                ToBase->TreeField=stackEdge;
+                ToBase->AgeField=time++;
+                tree.push_back(ToBaseVertexID);
+                //graph.SetMatchField(ToBaseVertexID,stackEdge);
+                // I'll let the augment path method recover the path.
+                augment(graph,ToBase,f);
+                break;
+            } else if (!ToBase->IsReached() && graph.IsMatched(ToBaseVertexID)){
+                ToBase->TreeField=stackEdge;
+                ToBase->AgeField=time++;
+                tree.push_back(ToBaseVertexID);
+
+                matchedEdge=graph.GetMatchField(ToBaseVertexID);
+                nextVertexIndex = Graph<IT,VT>::Other(graph,matchedEdge,ToBaseVertexID);
+                nextVertex = &vertexVector[nextVertexIndex];
+                nextVertex->AgeField=time++;
+                tree.push_back(nextVertexIndex);
+
+                //Graph<IT,VT>::pushEdgesOntoStack(graph,vertexVector,nextVertexIndex,stack,matchedEdge);
+                StackPusher<IT,VT,StackType>::pushEdgesOntoStack(graph,vertexVector,nextVertexIndex,stack,matchedEdge);
+
+            } else if (ToBase->IsEven()) {
+                // Shrink Blossoms
+                // Not sure if this is wrong or the augment method is wrong
+                Blossom::Shrink(graph,stackEdge,dsu,vertexVector,stack);
+            }
         }
+        f.reinit();
+        f.clear();
     }
 }
 
