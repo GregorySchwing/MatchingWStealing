@@ -23,6 +23,14 @@ public:
     static void match(Graph<IT, VT>& graph, Statistics<IT>& stats);
     static void hello_world(int tid);
     template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
+    static void search_master(Graph<IT, VT>& graph, 
+                    const size_t V_index,
+                    std::vector<FrontierType<IT, StackType>*> & frontiers,
+                    volatile bool &foundPath,
+                    volatile bool &finished,
+                    std::vector<size_t> &read_messages,
+                    int tid);
+    template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
     static Vertex<IT> * search(Graph<IT, VT>& graph, 
                     const size_t V_index,
                     FrontierType<IT, StackType> & f);
@@ -84,17 +92,8 @@ void Matcher::match_master(std::vector<std::thread> &threads,
         if (graph.matching[i] < 0) {
             //printf("SEARCHING FROM %ld!\n",i);
             // Your matching logic goes here...
-            TailOfAugmentingPath=search(graph,i,f);
-            // If not a nullptr, I found an AP.
-            if (TailOfAugmentingPath){
-                augment(graph,TailOfAugmentingPath,f);
-                f.reinit();
-                f.clear();
-                //printf("FOUND AP!\n");
-            } else {
-                f.clear();
-                //printf("DIDNT FOUND AP!\n");
-            }
+            //TailOfAugmentingPath=search(graph,i,f);
+            search_master(graph,i,frontiers,foundPath,finished,read_messages,0);
         }
     }
 }
@@ -178,11 +177,91 @@ void Matcher::search_slave(Graph<IT, VT>& graph,
     auto allocate_end = high_resolution_clock::now();
     auto duration_alloc = duration_cast<milliseconds>(allocate_end - allocate_start);
     std::cout << "Thread " << tid << " Frontier (9|V|+|E|) memory allocation time: "<< duration_alloc.count() << " milliseconds" << '\n';
+    f.waiting=true;
     while(!finished){
+        while(f.waiting && !finished){
 
+        }
     }
 }
 
+template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
+void Matcher::search_master(Graph<IT, VT>& graph, 
+                    const size_t V_index,
+                    std::vector<FrontierType<IT, StackType>*> & frontiers,
+                    volatile bool &foundPath,
+                    volatile bool &finished,
+                    std::vector<size_t> &read_messages,
+                    int tid){
+    Vertex<int64_t> *FromBase,*ToBase, *nextVertex;
+    int64_t FromBaseVertexID,ToBaseVertexID;
+    IT stackEdge, matchedEdge;
+    IT nextVertexIndex;
+    IT time = 0;
+    FrontierType<IT, StackType> & frontier = *(frontiers[tid]);
+    StackType<IT> &stack = frontier.stack;
+    Stack<IT> &tree = frontier.tree;
+    DisjointSetUnion<IT> &dsu = frontier.dsu;
+    std::vector<Vertex<IT>> & vertexVector = frontier.vertexVector;
+    nextVertex = &vertexVector[V_index];
+    tree.push_back(V_index);
+    nextVertex->AgeField=time++;
+    StackPusher<IT,VT,StackType>::pushEdgesOntoStack(graph,vertexVector,V_index,stack);
+    while(!stack.empty()){
+        stackEdge = stack.back();
+        stack.pop_back();
+        //stack.pop_back();
+        // Necessary because vertices dont know their own index.
+        // It simplifies vector creation..
+        FromBaseVertexID = dsu[Graph<IT,VT>::EdgeFrom(graph,stackEdge)];
+        FromBase = &vertexVector[FromBaseVertexID];
+
+        // Necessary because vertices dont know their own index.
+        // It simplifies vector creation..
+        ToBaseVertexID = dsu[Graph<IT,VT>::EdgeTo(graph,stackEdge)];
+        ToBase = &vertexVector[ToBaseVertexID];
+
+        // Edge is between two vertices in the same blossom, continue.
+        if (FromBase == ToBase)
+            continue;
+        if(!FromBase->IsEven()){
+            std::swap(FromBase,ToBase);
+            std::swap(FromBaseVertexID,ToBaseVertexID);
+        }
+        // An unreached, unmatched vertex is found, AN AUGMENTING PATH!
+        if (!ToBase->IsReached() && !graph.IsMatched(ToBaseVertexID)){
+            ToBase->TreeField=stackEdge;
+            ToBase->AgeField=time++;
+            tree.push_back(ToBaseVertexID);
+            //graph.SetMatchField(ToBaseVertexID,stackEdge);
+            // I'll let the augment path method recover the path.
+            augment(graph,ToBase,frontier);
+            frontier.reinit();
+            frontier.clear();
+            return;
+        } else if (!ToBase->IsReached() && graph.IsMatched(ToBaseVertexID)){
+            ToBase->TreeField=stackEdge;
+            ToBase->AgeField=time++;
+            tree.push_back(ToBaseVertexID);
+
+            matchedEdge=graph.GetMatchField(ToBaseVertexID);
+            nextVertexIndex = Graph<IT,VT>::Other(graph,matchedEdge,ToBaseVertexID);
+            nextVertex = &vertexVector[nextVertexIndex];
+            nextVertex->AgeField=time++;
+            tree.push_back(nextVertexIndex);
+
+            //Graph<IT,VT>::pushEdgesOntoStack(graph,vertexVector,nextVertexIndex,stack,matchedEdge);
+            StackPusher<IT,VT,StackType>::pushEdgesOntoStack(graph,vertexVector,nextVertexIndex,stack,matchedEdge);
+
+        } else if (ToBase->IsEven()) {
+            // Shrink Blossoms
+            // Not sure if this is wrong or the augment method is wrong
+            Blossom::Shrink(graph,stackEdge,dsu,vertexVector,stack);
+        }
+    }
+    frontier.clear();
+    return;
+}
 
 template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
 Vertex<IT> * Matcher::search(Graph<IT, VT>& graph, 
@@ -205,13 +284,6 @@ Vertex<IT> * Matcher::search(Graph<IT, VT>& graph,
     //Graph<IT,VT>::pushEdgesOntoStack(graph,vertexVector,V_index,stack);
     StackPusher<IT,VT,StackType>::pushEdgesOntoStack(graph,vertexVector,V_index,stack);
     while(!stack.empty()){
-        /*
-        std::optional<IT> stackEdgeOpt = stack.pop();
-        if (stackEdgeOpt.has_value())
-            stackEdge = stackEdgeOpt.value();
-        else
-            continue;
-        */
         stackEdge = stack.back();
         stack.pop_back();
         //stack.pop_back();

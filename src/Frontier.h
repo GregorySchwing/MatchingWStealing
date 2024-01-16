@@ -19,6 +19,7 @@ public:
     Stack<IT> tree;
     Stack<IT> path;
     DisjointSetUnion<IT> dsu;
+    volatile bool waiting;
     private:
     unsigned int nextPowerOfTwo(unsigned int n);
 };
@@ -33,15 +34,7 @@ path(M),
 stack(((std::is_same<StackType<IT>, std::deque<IT>>::value) || 
     (std::is_same<StackType<IT>, std::list<IT>>::value))?0:nextPowerOfTwo(M)){
     dsu.reset(N);
-    /*
-    if (std::is_same<StackType<IT>, std::list<IT>>::value){
-    //if (typeid(StackType<IT>) == typeid(std::list<IT>)){
-        stack.clear();
-    } else if (std::is_same<StackType<IT>, std::deque<IT>>::value){
-    //} else if (typeid(StackType<IT>) == typeid(std::deque<IT>)){
-        stack.clear();
-    }
-    */
+    waiting=false;
 }
 
 // Constructor
@@ -64,7 +57,6 @@ void Frontier<IT, StackType>::reinit(){
 template <typename IT, template <typename> class StackType>
 void Frontier<IT, StackType>::clear(){       
     stack.clear();
-    //while(stack.pop()){}
     tree.clear();
     path.clear();
 }
