@@ -207,8 +207,10 @@ if(${WSQ_BUILD_EXAMPLES})
 
 message(STATUS "Building examples ...")
 add_subdirectory(fast_matrix_market)
+add_subdirectory(concurrentqueue)
+
 add_executable(matcher ${PROJECT_SOURCE_DIR}/Main.cpp)
-target_include_directories(matcher PRIVATE ${PROJECT_SOURCE_DIR}/src)
+target_include_directories(matcher PRIVATE ${PROJECT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/concurrentqueue)
 
 find_package(OpenMP REQUIRED)
 if(OpenMP_CXX_FOUND)

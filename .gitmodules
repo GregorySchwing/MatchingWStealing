@@ -1,3 +1,6 @@
 [submodule "fast_matrix_market"]
 	path = fast_matrix_market
 	url = https://github.com/GregorySchwing/fast_matrix_market.git
+[submodule "concurrentqueue"]
+	path = concurrentqueue
+	url = https://github.com/GregorySchwing/concurrentqueue.git
