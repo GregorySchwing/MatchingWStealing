@@ -54,8 +54,9 @@ public:
                                                     std::vector<size_t> &read_messages,
                                                     moodycamel::ConcurrentQueue<IT> &worklist,
                                                     Graph<IT, VT> &graph,
-                                                    volatile bool &foundPath,
-                                                    volatile bool &finished,
+                                                    bool &ready,
+                                                    bool &processed,
+                                                    bool &finished,
                                                     std::mutex & mtx,
                                                     std::condition_variable & cv);
 };
@@ -66,15 +67,16 @@ bool ThreadFactory::create_threads_concurrentqueue_baseline(std::vector<std::thr
                                                     std::vector<size_t> &read_messages,
                                                     moodycamel::ConcurrentQueue<IT> &worklist,
                                                     Graph<IT, VT> &graph,
-                                                    volatile bool &foundPath,
-                                                    volatile bool &finished,
+                                                    bool &ready,
+                                                    bool &processed,
+                                                    bool &finished,
                                                     std::mutex & mtx,
                                                     std::condition_variable & cv) {
     // Works, infers template types from args
     //Matcher::search(graph,0,*(frontiers[0]));
     for (unsigned i = 0; i < num_threads; ++i) {
         //threads[i] = std::thread(&Matcher::hello_world, i);
-        threads[i] = std::thread( [&,i]{ Matcher::search_worker<IT,VT,StackType>(worklist,graph,foundPath,finished,read_messages,i,mtx,cv); } );
+        threads[i] = std::thread( [&,i]{ Matcher::search_worker<IT,VT,StackType>(worklist,graph,ready,processed,finished,read_messages,i,mtx,cv); } );
 
         // Create a cpu_set_t object representing a set of CPUs. Clear it and mark
         // only CPU i as set.

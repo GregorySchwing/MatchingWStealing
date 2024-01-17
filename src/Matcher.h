@@ -28,8 +28,8 @@ public:
     static void search_master(Graph<IT, VT>& graph, 
                     const size_t V_index,
                     std::vector<FrontierType<IT, StackType>*> & frontiers,
-                    volatile bool &foundPath,
-                    volatile bool &finished,
+                    bool &foundPath,
+                    bool &finished,
                     std::vector<size_t> &read_messages,
                     int tid);
     template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
@@ -40,8 +40,9 @@ public:
     static void search_worker(
                     moodycamel::ConcurrentQueue<IT> &worklist,
                     Graph<IT, VT>& graph, 
-                    volatile bool &foundPath,
-                    volatile bool &finished,
+                    bool &ready,
+                    bool &processed,
+                    bool &finished,
                     std::vector<size_t> &read_messages,
                     int tid,
                     std::mutex & mtx,
@@ -53,8 +54,8 @@ public:
                                                         std::vector<size_t> &read_messages,
                                                         Graph<IT, VT> &graph,
                                                         std::vector<Frontier<IT, StackType>*> &frontiers,
-                                                        volatile bool &foundPath,
-                                                        volatile bool &finished);
+                                                        bool &foundPath,
+                                                        bool &finished);
 
     template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
     static void augment(Graph<IT, VT>& graph, 
@@ -81,8 +82,8 @@ void Matcher::match_master(std::vector<std::thread> &threads,
                                                     std::vector<size_t> &read_messages,
                                                     Graph<IT, VT> &graph,
                                                     std::vector<Frontier<IT, StackType>*> &frontiers,
-                                                    volatile bool &foundPath,
-                                                    volatile bool &finished){
+                                                    bool &foundPath,
+                                                    bool &finished){
     IT tid = 0;
     auto allocate_start = high_resolution_clock::now();
     //Frontier<IT> f(graph.getN(),graph.getM());
@@ -171,8 +172,9 @@ template <typename IT, typename VT, template <typename> class StackType>
 void Matcher::search_worker(
                     moodycamel::ConcurrentQueue<IT> &worklist,
                     Graph<IT, VT>& graph, 
-                    volatile bool &foundPath,
-                    volatile bool &finished,
+                    bool &ready,
+                    bool &processed,
+                    bool &finished,
                     std::vector<size_t> &read_messages,
                     int tid,
                     std::mutex & mtx,
@@ -183,13 +185,13 @@ void Matcher::search_worker(
     IT nextVertexIndex;
     IT time;
 
-    std::cout << "Hello World from Thread " << tid << std::endl;
+    //std::cout << "Hello World from Thread " << tid << std::endl;
     auto allocate_start = high_resolution_clock::now();
     //Frontier<IT> f(graph.getN(),graph.getM());
     Frontier<IT,StackType> f(graph.getN(),graph.getM());
     auto allocate_end = high_resolution_clock::now();
     auto duration_alloc = duration_cast<milliseconds>(allocate_end - allocate_start);
-    std::cout << "Thread " << tid << " Frontier (9|V|+|E|) memory allocation time: "<< duration_alloc.count() << " milliseconds" << '\n';
+    //std::cout << "Thread " << tid << " Frontier (9|V|+|E|) memory allocation time: "<< duration_alloc.count() << " milliseconds" << '\n';
 
 
     StackType<IT> &stack = f.stack;
@@ -200,7 +202,11 @@ void Matcher::search_worker(
     while (!finished) {
         if(!worklist.try_dequeue(V_index))
             continue;
-        std::cout << "Thread " << tid << " Dequeued v: "<< V_index << std::endl;
+
+        //std::cout << "Worker thread start" << std::endl;
+        std::unique_lock lk(mtx);
+        cv.wait(lk, [&] { return ready; });
+        //std::cout << "Worker thread " << tid << " is processing data " << V_index << std::endl;
         read_messages[tid]++;
         time = 0;
         nextVertex = &vertexVector[V_index];
@@ -236,7 +242,7 @@ void Matcher::search_worker(
                 //graph.SetMatchField(ToBaseVertexID,stackEdge);
                 // I'll let the augment path method recover the path.
                 augment(graph,ToBase,f);
-                foundPath = true;
+                //foundPath = true;
                 break;
             } else if (!ToBase->IsReached() && graph.IsMatched(ToBaseVertexID)){
                 ToBase->TreeField=stackEdge;
@@ -260,16 +266,16 @@ void Matcher::search_worker(
         }
         f.reinit();
         f.clear();
-        std::cout << "Worker " << tid << " found the answer: " << std::endl;
 
-        // Lock the mutex before modifying shared data
-        std::unique_lock<std::mutex> lock(mtx);
-        std::cout << "Worker " << tid << " got mutex" << std::endl;
+        // Send data back to master thread
+        processed = true;
+        //std::cout << "Worker thread signals data processing completed" << std::endl;
 
-        // Update the result and notify the master thread
-        foundPath = false;
-
-        // Notify the master thread
+        // Manual unlocking is done before notifying, to avoid waking up
+        // the waiting thread only to block again (see notify_one for details)
+        lk.unlock();
+        // The worker thread has done the work,
+        // Notify the master thread to continue the work.
         cv.notify_one();
     }
 }
@@ -278,8 +284,8 @@ template <typename IT, typename VT, template <typename, template <typename> clas
 void Matcher::search_master(Graph<IT, VT>& graph, 
                     const size_t V_index,
                     std::vector<FrontierType<IT, StackType>*> & frontiers,
-                    volatile bool &foundPath,
-                    volatile bool &finished,
+                    bool &foundPath,
+                    bool &finished,
                     std::vector<size_t> &read_messages,
                     int tid){
     Vertex<int64_t> *FromBase,*ToBase, *nextVertex;
@@ -536,8 +542,11 @@ void Matcher::pathThroughBlossom(Graph<IT, VT>& graph,
 
 template <typename IT, typename VT, template <typename> class StackType>
 void Matcher::match_parallel(Graph<IT, VT>& graph) {
-    volatile bool finished = false;
-    volatile bool foundPath = false;
+    bool finished = false;
+    
+    bool ready = false;
+    bool processed = false;
+    bool foundPath = false;
 
     // This will take the place of foundPath/finished on a vertex
     std::mutex mtx;
@@ -547,12 +556,12 @@ void Matcher::match_parallel(Graph<IT, VT>& graph) {
     size_t capacity = 1;
     moodycamel::ConcurrentQueue<IT> worklist{capacity};
     // 8 workers.
-    constexpr unsigned num_threads = 1;
+    constexpr unsigned num_threads = 4;
     std::vector<std::thread> workers(num_threads);
     std::vector<size_t> read_messages;
     read_messages.resize(num_threads);
     // Access the graph elements as needed
-    ThreadFactory::create_threads_concurrentqueue_baseline<IT,VT,StackType>(workers, num_threads,read_messages,worklist,graph,foundPath,finished,mtx,cv);
+    ThreadFactory::create_threads_concurrentqueue_baseline<IT,VT,StackType>(workers, num_threads,read_messages,worklist,graph,ready,processed,finished,mtx,cv);
 
     IT written_messages = 0;
     cpu_set_t my_set;
@@ -566,13 +575,27 @@ void Matcher::match_parallel(Graph<IT, VT>& graph) {
 
     for (std::size_t i = 0; i < graph.getN(); ++i) {
         if (graph.matching[i] < 0) {
-            std::cout << "Master thread enqueuing: v: " << i << std::endl;
-            worklist.enqueue(i);
-            // Lock the mutex before waiting
-            std::unique_lock<std::mutex> lock(mtx);
-            // Wait until an answer is found by a worker
-            cv.wait(lock);
-            std::cout << "Master thread continues with the result: v: " << i << "Found path :" << foundPath << std::endl;
+            ready = false;
+            processed = false;
+            //std::cout << "Master thread start " << i << std::endl;
+            // Send data to the worker thread.
+            {
+                worklist.enqueue(i);
+                std::lock_guard lk(mtx);
+                ready = true;
+                //std::cout << "Master thread signals data ready for processing"
+                //        << std::endl;
+            }
+            // The mater thread has done the preliminary work,
+            // Notify the worker thread to continue the work.
+            cv.notify_one();
+
+            // Wait for the worker.
+            {
+                std::unique_lock lk(mtx);
+                cv.wait(lk, [&] { return processed; });
+            }
+            //std::cout << "Back in master thread, data = " << i << std::endl;
         }
     }
 

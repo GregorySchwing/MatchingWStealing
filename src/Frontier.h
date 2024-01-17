@@ -19,7 +19,7 @@ public:
     Stack<IT> tree;
     Stack<IT> path;
     DisjointSetUnion<IT> dsu;
-    volatile bool waiting;
+    bool waiting;
     private:
     unsigned int nextPowerOfTwo(unsigned int n);
 };
