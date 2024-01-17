@@ -213,12 +213,11 @@ void Matcher::search_worker(
     std::vector<Vertex<IT>> & vertexVector = f.vertexVector;
     IT V_index;
     while (!finished) {
-        if(!worklist.try_dequeue(V_index))
-            continue;
-
         //std::cout << "Worker thread start" << std::endl;
         std::unique_lock lk(mtx);
         cv.wait(lk, [&] { return ready; });
+        if(!worklist.try_dequeue(V_index))
+            continue;
         //std::cout << "Worker thread " << tid << " is processing data " << V_index << std::endl;
         read_messages[tid]++;
         time = 0;
