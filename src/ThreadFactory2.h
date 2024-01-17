@@ -76,7 +76,7 @@ bool ThreadFactory::create_threads_concurrentqueue_baseline(std::vector<std::thr
     //Matcher::search(graph,0,*(frontiers[0]));
     for (unsigned i = 0; i < num_threads; ++i) {
         //threads[i] = std::thread(&Matcher::hello_world, i);
-        threads[i] = std::thread( [&,i]{ Matcher::search_worker<IT,VT,StackType>(worklist,graph,ready,processed,finished,read_messages,i,mtx,cv); } );
+        threads[i] = std::thread( [&,i]{ Matcher::search_worker_test<IT,VT,StackType>(worklist,graph,ready,processed,finished,read_messages,i,mtx,cv); } );
 
         // Create a cpu_set_t object representing a set of CPUs. Clear it and mark
         // only CPU i as set.

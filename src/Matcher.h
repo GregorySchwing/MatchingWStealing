@@ -22,6 +22,8 @@ public:
     template <typename IT, typename VT, template <typename> class StackType = Stack>
     static void match_parallel(Graph<IT, VT>& graph);
     template <typename IT, typename VT, template <typename> class StackType = Stack>
+    static void match_serial(Graph<IT, VT>& graph);
+    template <typename IT, typename VT, template <typename> class StackType = Stack>
     static void match(Graph<IT, VT>& graph, Statistics<IT>& stats);
     static void hello_world(int tid);
     template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
@@ -38,6 +40,17 @@ public:
                     FrontierType<IT, StackType> & f);
     template <typename IT, typename VT, template <typename> class StackType>
     static void search_worker(
+                    moodycamel::ConcurrentQueue<IT> &worklist,
+                    Graph<IT, VT>& graph, 
+                    bool &ready,
+                    bool &processed,
+                    bool &finished,
+                    std::vector<size_t> &read_messages,
+                    int tid,
+                    std::mutex & mtx,
+                    std::condition_variable & cv);
+    template <typename IT, typename VT, template <typename> class StackType>
+    static void search_worker_test(
                     moodycamel::ConcurrentQueue<IT> &worklist,
                     Graph<IT, VT>& graph, 
                     bool &ready,
@@ -279,6 +292,61 @@ void Matcher::search_worker(
         cv.notify_one();
     }
 }
+
+
+template <typename IT, typename VT, template <typename> class StackType>
+void Matcher::search_worker_test(
+                    moodycamel::ConcurrentQueue<IT> &worklist,
+                    Graph<IT, VT>& graph, 
+                    bool &ready,
+                    bool &processed,
+                    bool &finished,
+                    std::vector<size_t> &read_messages,
+                    int tid,
+                    std::mutex & mtx,
+                    std::condition_variable & cv) {
+    Vertex<int64_t> *FromBase,*ToBase, *nextVertex;
+    int64_t FromBaseVertexID,ToBaseVertexID;
+    IT stackEdge, matchedEdge;
+    IT nextVertexIndex;
+    IT time;
+
+    //std::cout << "Hello World from Thread " << tid << std::endl;
+    auto allocate_start = high_resolution_clock::now();
+    //Frontier<IT> f(graph.getN(),graph.getM());
+    Frontier<IT,StackType> f(graph.getN(),graph.getM());
+    auto allocate_end = high_resolution_clock::now();
+    auto duration_alloc = duration_cast<milliseconds>(allocate_end - allocate_start);
+    //std::cout << "Thread " << tid << " Frontier (9|V|+|E|) memory allocation time: "<< duration_alloc.count() << " milliseconds" << '\n';
+
+
+    StackType<IT> &stack = f.stack;
+    Stack<IT> &tree = f.tree;
+    DisjointSetUnion<IT> &dsu = f.dsu;
+    std::vector<Vertex<IT>> & vertexVector = f.vertexVector;
+    IT V_index;
+    Vertex<IT> * TailOfAugmentingPath;
+    // Access the graph elements as needed
+    for (std::size_t i = 0; i < graph.getN(); ++i) {
+        if (graph.matching[i] < 0) {
+            //printf("SEARCHING FROM %ld!\n",i);
+            // Your matching logic goes here...
+            TailOfAugmentingPath=search(graph,i,f);
+            // If not a nullptr, I found an AP.
+            if (TailOfAugmentingPath){
+                augment(graph,TailOfAugmentingPath,f);
+                f.reinit();
+                f.clear();
+                //printf("FOUND AP!\n");
+            } else {
+                f.clear();
+                //printf("DIDNT FOUND AP!\n");
+            }
+        }
+    }
+    finished = true;
+}
+
 
 template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
 void Matcher::search_master(Graph<IT, VT>& graph, 
@@ -598,6 +666,57 @@ void Matcher::match_parallel(Graph<IT, VT>& graph) {
             //std::cout << "Back in master thread, data = " << i << std::endl;
         }
     }
+
+    //Matcher::match_master<IT, VT, StackType>(workers, num_threads,read_messages,graph,frontiers,foundPath,finished);
+    auto match_end = high_resolution_clock::now();
+
+    auto duration = duration_cast<milliseconds>(match_end - match_start);
+
+    finished=true;
+
+    
+    print_results(BenchResult{num_threads, written_messages, read_messages, duration});
+
+    for (auto& t : workers) {
+        t.join();
+    }
+    
+    return;
+}
+
+// Mutex/CV inspired from https://leimao.github.io/blog/CPP-Condition-Variable/
+template <typename IT, typename VT, template <typename> class StackType>
+void Matcher::match_serial(Graph<IT, VT>& graph) {
+    bool finished = false;
+    
+    bool ready = false;
+    bool processed = false;
+    bool foundPath = false;
+
+    // This will take the place of foundPath/finished on a vertex
+    std::mutex mtx;
+    std::condition_variable cv;
+    // Multi-producer; Multi-consumer queue, aka worklist
+    // Start off by using it as a dynamic allocator of work.
+    size_t capacity = 1;
+    moodycamel::ConcurrentQueue<IT> worklist{capacity};
+    // 8 workers.
+    constexpr unsigned num_threads = 1;
+    std::vector<std::thread> workers(num_threads);
+    std::vector<size_t> read_messages;
+    read_messages.resize(num_threads);
+    // Access the graph elements as needed
+    ThreadFactory::create_threads_concurrentqueue_baseline<IT,VT,StackType>(workers, num_threads,read_messages,worklist,graph,ready,processed,finished,mtx,cv);
+
+    IT written_messages = 0;
+    cpu_set_t my_set;
+    CPU_ZERO(&my_set);
+    CPU_SET(0, &my_set);
+    if (sched_setaffinity(0, sizeof(cpu_set_t), &my_set)) {
+        std::cout << "sched_setaffinity error: " << strerror(errno) << std::endl;
+    }
+    auto match_start = high_resolution_clock::now();
+    while(!finished){}
 
     //Matcher::match_master<IT, VT, StackType>(workers, num_threads,read_messages,graph,frontiers,foundPath,finished);
     auto match_end = high_resolution_clock::now();
