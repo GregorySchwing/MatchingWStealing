@@ -19,8 +19,16 @@ public:
     static void match(Graph<IT, VT>& graph);
     template <typename IT, typename VT, template <typename> class StackType = Stack>
     static void match(Graph<IT, VT>& graph, Statistics<IT>& stats);
-
+    template <typename IT, typename VT, template <typename> class StackType = Stack>
+    static void match_parallel(Graph<IT, VT>& graph);
+    template <typename IT, typename VT, template <typename> class StackType = Stack>
+    static void match_persistent(Graph<IT, VT>& graph,
+                                bool &ready,
+                                bool &processed,
+                                std::mutex & mtx,
+                                std::condition_variable & cv);
 private:
+
     template <typename IT, typename VT, template <typename, template <typename> class> class FrontierType, template <typename> class StackType = Stack>
     static Vertex<IT> * search(Graph<IT, VT>& graph, 
                     const size_t V_index,
@@ -66,6 +74,164 @@ void Matcher::match(Graph<IT, VT>& graph) {
             }
         }
     }
+}
+
+#include "ThreadFactory2.h"
+#include "concurrentqueue.h"
+
+template <typename IT, typename VT, template <typename> class StackType>
+void Matcher::match_parallel(Graph<IT, VT>& graph) {
+    bool finished = false;
+    bool ready = false;
+    bool processed = false;
+    bool foundPath = false;
+
+    // This will take the place of foundPath/finished on a vertex
+    std::mutex mtx;
+    std::condition_variable cv;
+    // Multi-producer; Multi-consumer queue, aka worklist
+    // Start off by using it as a dynamic allocator of work.
+    size_t capacity = 1;
+    moodycamel::ConcurrentQueue<IT> worklist{capacity};
+    // 8 workers.
+    constexpr unsigned num_threads = 8;
+    std::vector<std::thread> workers(num_threads);
+    std::vector<size_t> read_messages;
+    read_messages.resize(num_threads);
+    // Access the graph elements as needed
+    ThreadFactory::create_threads_concurrentqueue_baseline<IT,VT,StackType>(workers, num_threads,read_messages,worklist,graph,ready,processed,finished,mtx,cv);
+
+    IT written_messages = 0;
+    cpu_set_t my_set;
+    CPU_ZERO(&my_set);
+    CPU_SET(0, &my_set);
+    if (sched_setaffinity(0, sizeof(cpu_set_t), &my_set)) {
+        std::cout << "sched_setaffinity error: " << strerror(errno) << std::endl;
+    }
+
+    auto match_start = high_resolution_clock::now();
+    {
+        std::lock_guard lk(mtx);
+        ready = true;
+        //std::cout << "Master thread signals data ready for processing"
+        //        << std::endl;
+    }
+    // The mater thread has done the preliminary work,
+    // Notify the worker thread to continue the work.
+    cv.notify_one();
+
+    // Wait for the worker.
+    {
+        std::unique_lock lk(mtx);
+        cv.wait(lk, [&] { return processed; });
+    }
+    //std::cout << "Back in master thread, data = " << i << std::endl;
+    auto match_end = high_resolution_clock::now();
+    auto duration = duration_cast<milliseconds>(match_end - match_start);
+    
+    print_results(BenchResult{num_threads, written_messages, read_messages, duration});
+
+    for (auto& t : workers) {
+        t.join();
+    }
+    
+    return;
+}
+
+
+template <typename IT, typename VT, template <typename> class StackType>
+void Matcher::match_persistent(Graph<IT, VT>& graph,
+                                bool &ready,
+                                bool &processed,
+                                std::mutex & mtx,
+                                std::condition_variable & cv) {
+    auto allocate_start = high_resolution_clock::now();
+    //Frontier<IT> f(graph.getN(),graph.getM());
+    Frontier<IT,StackType> f(graph.getN(),graph.getM());
+    auto allocate_end = high_resolution_clock::now();
+    auto duration_alloc = duration_cast<milliseconds>(allocate_end - allocate_start);
+    std::cout << "Frontier (9|V|+|E|) memory allocation time: "<< duration_alloc.count() << " milliseconds" << '\n';
+    Vertex<IT> * TailOfAugmentingPath;
+    // Access the graph elements as needed
+    std::unique_lock lk(mtx);
+    cv.wait(lk, [&] { return ready; });
+    std::thread::id threadId = std::this_thread::get_id();
+    std::cout << "Worker thread start" << threadId <<std::endl;
+    for (std::size_t i = 0; i < graph.getN(); ++i) {
+        if (graph.matching[i] < 0) {
+            //printf("SEARCHING FROM %ld!\n",i);
+            // Your matching logic goes here...
+            TailOfAugmentingPath=search(graph,i,f);
+            // If not a nullptr, I found an AP.
+            if (TailOfAugmentingPath){
+                augment(graph,TailOfAugmentingPath,f);
+                f.reinit();
+                f.clear();
+                //printf("FOUND AP!\n");
+            } else {
+                f.clear();
+                //printf("DIDNT FOUND AP!\n");
+            }
+        }
+    }
+    // Send data back to master thread
+    processed = true;
+    //std::cout << "Worker thread signals data processing completed" << std::endl;
+
+    // Manual unlocking is done before notifying, to avoid waking up
+    // the waiting thread only to block again (see notify_one for details)
+    lk.unlock();
+    // The worker thread has done the work,
+    // Notify the master thread to continue the work.
+    cv.notify_one();
+}
+
+
+template <typename IT, typename VT, template <typename> class StackType>
+void Matcher::match_persistent(Graph<IT, VT>& graph,
+                                bool &ready,
+                                bool &processed,
+                                std::mutex & mtx,
+                                std::condition_variable & cv) {
+    auto allocate_start = high_resolution_clock::now();
+    //Frontier<IT> f(graph.getN(),graph.getM());
+    Frontier<IT,StackType> f(graph.getN(),graph.getM());
+    auto allocate_end = high_resolution_clock::now();
+    auto duration_alloc = duration_cast<milliseconds>(allocate_end - allocate_start);
+    std::cout << "Frontier (9|V|+|E|) memory allocation time: "<< duration_alloc.count() << " milliseconds" << '\n';
+    Vertex<IT> * TailOfAugmentingPath;
+    // Access the graph elements as needed
+    std::unique_lock lk(mtx);
+    cv.wait(lk, [&] { return ready; });
+    std::thread::id threadId = std::this_thread::get_id();
+    std::cout << "Worker thread start" << threadId <<std::endl;
+    for (std::size_t i = 0; i < graph.getN(); ++i) {
+        if (graph.matching[i] < 0) {
+            //printf("SEARCHING FROM %ld!\n",i);
+            // Your matching logic goes here...
+            TailOfAugmentingPath=search(graph,i,f);
+            // If not a nullptr, I found an AP.
+            if (TailOfAugmentingPath){
+                augment(graph,TailOfAugmentingPath,f);
+                f.reinit();
+                f.clear();
+                //printf("FOUND AP!\n");
+            } else {
+                f.clear();
+                //printf("DIDNT FOUND AP!\n");
+            }
+        }
+    }
+    // Send data back to master thread
+    processed = true;
+    //std::cout << "Worker thread signals data processing completed" << std::endl;
+
+    // Manual unlocking is done before notifying, to avoid waking up
+    // the waiting thread only to block again (see notify_one for details)
+    lk.unlock();
+    // The worker thread has done the work,
+    // Notify the master thread to continue the work.
+    cv.notify_one();
 }
 
 

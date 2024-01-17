@@ -25,12 +25,6 @@ public:
     bool IsMatched(size_t index) const;
     IT GetMatchField(size_t index) const;
     void SetMatchField(size_t index,IT edge);
-    static bool pushEdgesOntoStack(const Graph<IT, VT>& graph, 
-                                        std::vector<Vertex<IT>> & vertexVector, 
-                                        IT V_index, 
-                                        Stack<IT> &stack,
-                                        IT optionalEdge1=-1,
-                                        IT optionalEdge2=-1);
     static inline IT Other(const Graph<IT, VT>& graph, const IT edgeIndex, const IT vertexId);
     static IT EdgeFrom(const Graph<IT, VT>& graph, const IT edgeIndex);
     static IT EdgeTo(const Graph<IT, VT>& graph, const IT edgeIndex);
@@ -154,30 +148,6 @@ void Graph<IT,VT>::generateCSR(const std::vector<IT>& rows, const std::vector<IT
 }
 
 
-template <typename IT, typename VT>
-bool Graph<IT,VT>::pushEdgesOntoStack(const Graph<IT, VT>& graph, 
-                                    std::vector<Vertex<IT>> & vertexVector, 
-                                    IT V_index, 
-                                    Stack<IT> &stack,
-                                    IT optionalEdge1,
-                                    IT optionalEdge2){
-    IT nextVertexIndex;
-    Vertex<IT>* nextVertex;
-    // Push edges onto stack, breaking if that stackEdge is a solution.
-    for (IT start = graph.indptr[V_index]; start < graph.indptr[V_index + 1]; ++start) {
-        // For blossom contraction, need to skip repushing the matched & tree edges
-        if (graph.indices[start] == optionalEdge1 || graph.indices[start] == optionalEdge2)
-            continue;
-        stack.push_back(graph.indices[start]);
-
-        nextVertexIndex = Graph<IT, VT>::Other(graph, graph.indices[start], V_index);
-
-        nextVertex = &vertexVector[nextVertexIndex];
-        if (!nextVertex->IsReached() && !graph.IsMatched(nextVertexIndex))
-            return true;
-    }
-    return false;
-}
 /*
 // Static method to find the other endpoint of an edge
 template <typename IT, typename VT>
