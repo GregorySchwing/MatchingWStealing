@@ -539,7 +539,7 @@ void Matcher::pathThroughBlossom(Graph<IT, VT>& graph,
 // Needs to be after Matcher definition.
 // Not sure how to fix this.
 #include "ThreadFactory2.h"
-
+// Mutex/CV inspired from https://leimao.github.io/blog/CPP-Condition-Variable/
 template <typename IT, typename VT, template <typename> class StackType>
 void Matcher::match_parallel(Graph<IT, VT>& graph) {
     bool finished = false;
@@ -556,7 +556,7 @@ void Matcher::match_parallel(Graph<IT, VT>& graph) {
     size_t capacity = 1;
     moodycamel::ConcurrentQueue<IT> worklist{capacity};
     // 8 workers.
-    constexpr unsigned num_threads = 4;
+    constexpr unsigned num_threads = 1;
     std::vector<std::thread> workers(num_threads);
     std::vector<size_t> read_messages;
     read_messages.resize(num_threads);
